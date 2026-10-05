@@ -1,0 +1,22 @@
+name: Bethel School Bridge
+version: "1.0.0"
+slug: bethel_school_bridge
+description: Connects the Bethel School staff website (Building page) to Home Assistant for bells, lights and thermostats.
+url: https://github.com/bethelschool26-cmd/bethel-ha-addons
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+options:
+  site_url: https://homeworthschool.com
+  ha_url: http://homeassistant:8123
+  bridge_token: ""
+  ntfy_topic: ""
+  ha_token: ""
+schema:
+  site_url: url
+  ha_url: url
+  bridge_token: password
+  ntfy_topic: password
+  ha_token: password

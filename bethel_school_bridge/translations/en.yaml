@@ -1,0 +1,16 @@
+configuration:
+  site_url:
+    name: Website address
+    description: The staff website. Normally https://homeworthschool.com
+  ha_url:
+    name: Home Assistant address
+    description: How the app reaches Home Assistant on this box. Leave as http://homeassistant:8123
+  bridge_token:
+    name: Bridge token
+    description: Must match BRIDGE_TOKEN in the website's Netlify environment variables.
+  ntfy_topic:
+    name: Signal topic
+    description: Must match NTFY_TOPIC in the website's Netlify environment variables.
+  ha_token:
+    name: Home Assistant token
+    description: Long-lived access token created on the non-admin "Website Bridge" Home Assistant user.
