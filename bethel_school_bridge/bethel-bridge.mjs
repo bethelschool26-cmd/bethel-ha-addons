@@ -151,6 +151,12 @@ async function execute({ action, payload }) {
       });
     case "set_bells_enabled":
       if (typeof payload.on !== "boolean") throw new Error("Invalid value");
+      // The website's master switch. Turning bells on also makes sure the
+      // bell schedule automation itself is enabled; turning them off only
+      // flips the master toggle, which the automation checks.
+      if (payload.on) {
+        await callService("automation", "turn_on", { entity_id: config.automation });
+      }
       return callService("input_boolean", payload.on ? "turn_on" : "turn_off", {
         entity_id: BELLS_ENABLED,
       });
