@@ -8,7 +8,7 @@ Connects the **Building** pages of the Bethel School staff website
   Nothing on the school network is opened to the internet.
 - **Fixed list of actions.** It will only change bell times and bell slots, turn
   all bells on/off, ring the bell, switch lights (`light.*`), set thermostats
-  (`climate.*`, 60–80°F, off/heat/cool), and edit the thermostat schedule helpers
+  (`climate.*`, 60–80°F, off/heat/cool), and edit the outside light and thermostat schedule helpers
   (`thermostats_<zone>_*`). It refuses anything else.
 - **Commands expire after 60 seconds**, so a delayed "ring bell" is never rung late.
 - Home Assistant itself still runs the bell and thermostat schedules. If this app

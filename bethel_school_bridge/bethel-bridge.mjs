@@ -120,6 +120,33 @@ const scheduleEntities = (zone) => ({
   nightTemp: `input_number.thermostats_${zone}_night_temp`,
 });
 
+// Outside light schedules: Home Assistant helpers per fixture, read by the
+// "Outside Lights - Schedule (website)" automation. Keys must match
+// src/lib/outside-lights.ts.
+const OUTSIDE_KEYS = [
+  "south_wallpacks",
+  "w_front_wallpacks",
+  "back_center_wallpacks",
+  "up_down",
+  "back_wallpacks",
+  "north_gym_wp",
+  "parking_lot",
+  "carport_cans",
+  "front_eve_cans",
+  "gym_west_led",
+];
+const OUTSIDE_DIMMERS = ["parking_lot", "carport_cans", "front_eve_cans"];
+const OUTSIDE_IS_DARK = "input_boolean.outside_is_dark";
+const outsideEntities = (key) => ({
+  scheduled: `input_boolean.outside_${key}_scheduled`,
+  onMode: `input_select.outside_${key}_on_mode`,
+  onTime: `input_datetime.outside_${key}_on_time`,
+  offMode: `input_select.outside_${key}_off_mode`,
+  offTime: `input_datetime.outside_${key}_off_time`,
+  brightness: `input_number.outside_${key}_brightness`,
+  desired: `input_boolean.outside_${key}_desired`,
+});
+
 const isEntityList = (value, pattern) =>
   Array.isArray(value) && value.length > 0 && value.length <= 100 && value.every((e) => pattern.test(e));
 
@@ -206,6 +233,30 @@ async function execute({ action, payload }) {
       // Last, so the automation re-applies with all the new values in place.
       return callService("input_boolean", payload.enabled ? "turn_on" : "turn_off", { entity_id: ids.enabled });
     }
+    case "set_outside_schedule": {
+      const dimmer = OUTSIDE_DIMMERS.includes(payload.key);
+      if (
+        !OUTSIDE_KEYS.includes(payload.key) ||
+        typeof payload.scheduled !== "boolean" ||
+        !["dusk", "time"].includes(payload.onMode) ||
+        !["dawn", "time"].includes(payload.offMode) ||
+        !TIME.test(payload.onTime) ||
+        !TIME.test(payload.offTime) ||
+        (dimmer && !(Number.isInteger(payload.brightness) && payload.brightness >= 10 && payload.brightness <= 100))
+      ) {
+        throw new Error("Invalid outside light schedule");
+      }
+      const ids = outsideEntities(payload.key);
+      await callService("input_select", "select_option", { entity_id: ids.onMode, option: payload.onMode });
+      await callService("input_datetime", "set_datetime", { entity_id: ids.onTime, time: `${payload.onTime}:00` });
+      await callService("input_select", "select_option", { entity_id: ids.offMode, option: payload.offMode });
+      await callService("input_datetime", "set_datetime", { entity_id: ids.offTime, time: `${payload.offTime}:00` });
+      if (dimmer) {
+        await callService("input_number", "set_value", { entity_id: ids.brightness, value: payload.brightness });
+      }
+      // Last, so the schedule automation re-applies with all new values in place.
+      return callService("input_boolean", payload.scheduled ? "turn_on" : "turn_off", { entity_id: ids.scheduled });
+    }
     default:
       throw new Error(`Action not allowed: ${action}`);
   }
@@ -281,6 +332,25 @@ async function readSnapshot() {
     },
   );
 
+  // Only fixtures whose helpers exist in Home Assistant are reported.
+  const stateOf = (id) => byId.get(id)?.state;
+  const onOff = (id) => (stateOf(id) === "on" ? true : stateOf(id) === "off" ? false : null);
+  const hhmmss = (id) => (/^\d{2}:\d{2}:\d{2}$/.test(stateOf(id) ?? "") ? stateOf(id) : null);
+  const outsideSchedules = OUTSIDE_KEYS.filter((key) => byId.has(outsideEntities(key).scheduled)).map((key) => {
+    const ids = outsideEntities(key);
+    const brightness = Number.parseFloat(stateOf(ids.brightness));
+    return {
+      key,
+      scheduled: onOff(ids.scheduled),
+      onMode: ["dusk", "time"].includes(stateOf(ids.onMode)) ? stateOf(ids.onMode) : null,
+      onTime: hhmmss(ids.onTime),
+      offMode: ["dawn", "time"].includes(stateOf(ids.offMode)) ? stateOf(ids.offMode) : null,
+      offTime: hhmmss(ids.offTime),
+      brightness: OUTSIDE_DIMMERS.includes(key) && Number.isFinite(brightness) ? brightness : null,
+      shouldBeOn: onOff(ids.desired),
+    };
+  });
+
   const automation = byId.get(config.automation);
   return {
     bellsEnabled: isOn(BELLS_ENABLED),
@@ -289,6 +359,8 @@ async function readSnapshot() {
     lights,
     thermostats,
     thermostatSchedules,
+    outsideSchedules,
+    isDark: byId.has(OUTSIDE_IS_DARK) ? byId.get(OUTSIDE_IS_DARK).state === "on" : null,
     errors,
   };
 }
