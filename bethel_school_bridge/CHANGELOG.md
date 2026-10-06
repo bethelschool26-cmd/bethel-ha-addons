@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- Reports the classroom lights on Kasa motion switches (on/off, display only; never switched).
+
 ## 1.2.0
 
 - Outside light schedules: reports and edits the per-light outside schedule helpers

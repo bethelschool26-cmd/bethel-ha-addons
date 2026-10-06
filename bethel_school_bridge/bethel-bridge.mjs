@@ -137,6 +137,19 @@ const OUTSIDE_KEYS = [
 ];
 const OUTSIDE_DIMMERS = ["parking_lot", "carport_cans", "front_eve_cans"];
 const OUTSIDE_IS_DARK = "input_boolean.outside_is_dark";
+
+// Classroom lights on Kasa motion switches: reported (on/off) for display
+// only; the bridge never switches them.
+const CLASSROOM_SWITCH_LIGHTS = [
+  "switch.classroom_3_motion_sensor",
+  "switch.classroom_4_motion_sensor",
+  "switch.classroom_5_motion_sensor",
+  "switch.classroom_7_motion_sensor",
+  "switch.classroom_8_motion_sensor",
+  "switch.kindergaten_room_motion_sensor",
+  "switch.special_ed_motion_2",
+  "switch.aid_room_motion_1",
+];
 const outsideEntities = (key) => ({
   scheduled: `input_boolean.outside_${key}_scheduled`,
   onMode: `input_select.outside_${key}_on_mode`,
@@ -360,6 +373,12 @@ async function readSnapshot() {
     thermostats,
     thermostatSchedules,
     outsideSchedules,
+    switchLights: CLASSROOM_SWITCH_LIGHTS.filter((id) => byId.has(id)).map((id) => ({
+      entity: id,
+      name: byId.get(id).attributes?.friendly_name ?? id,
+      on: onOff(id),
+      brightness: null,
+    })),
     isDark: byId.has(OUTSIDE_IS_DARK) ? byId.get(OUTSIDE_IS_DARK).state === "on" : null,
     errors,
   };
