@@ -110,15 +110,21 @@ const THERMOSTAT_MAX_F = 80;
 const THERMOSTAT_MODES = ["off", "heat", "cool"];
 
 // Thermostat day/night schedules: Home Assistant helpers per zone, read by
-// the "Thermostats - <zone> schedule (website)" automations.
+// the "Thermostats - <zone> schedule (website)" automations. Each zone has a
+// cool schedule (the original helpers) and a heat schedule (thermostats_<zone>_heat_*);
+// each thermostat follows the schedule for its own mode.
 const SCHEDULE_ZONES = ["classrooms", "rest"];
-const scheduleEntities = (zone) => ({
-  enabled: `input_boolean.thermostats_${zone}_schedule`,
-  dayStart: `input_datetime.thermostats_${zone}_day_start`,
-  nightStart: `input_datetime.thermostats_${zone}_night_start`,
-  dayTemp: `input_number.thermostats_${zone}_day_temp`,
-  nightTemp: `input_number.thermostats_${zone}_night_temp`,
-});
+const SCHEDULE_MODES = ["heat", "cool"];
+const scheduleEntities = (zone, mode = "cool") => {
+  const prefix = `thermostats_${zone}_${mode === "heat" ? "heat_" : ""}`;
+  return {
+    enabled: `input_boolean.thermostats_${zone}_schedule`,
+    dayStart: `input_datetime.${prefix}day_start`,
+    nightStart: `input_datetime.${prefix}night_start`,
+    dayTemp: `input_number.${prefix}day_temp`,
+    nightTemp: `input_number.${prefix}night_temp`,
+  };
+};
 
 // Outside light schedules: Home Assistant helpers per fixture, read by the
 // "Outside Lights - Schedule (website)" automation. Keys must match
@@ -234,11 +240,16 @@ async function execute({ action, payload }) {
         !TIME.test(payload.dayStart) ||
         !TIME.test(payload.nightStart) ||
         payload.dayStart >= payload.nightStart ||
+        (payload.mode !== undefined && !SCHEDULE_MODES.includes(payload.mode)) ||
         !temps.every((t) => Number.isInteger(t) && t >= THERMOSTAT_MIN_F && t <= THERMOSTAT_MAX_F)
       ) {
         throw new Error("Invalid thermostat schedule");
       }
-      const ids = scheduleEntities(payload.zone);
+      const ids = scheduleEntities(payload.zone, payload.mode);
+      // Service calls on a missing helper silently do nothing, so check first.
+      await ha(`states/${ids.dayTemp}`).catch(() => {
+        throw new Error(`The ${payload.mode ?? "cool"} schedule is not set up in Home Assistant`);
+      });
       await callService("input_datetime", "set_datetime", { entity_id: ids.dayStart, time: `${payload.dayStart}:00` });
       await callService("input_datetime", "set_datetime", { entity_id: ids.nightStart, time: `${payload.nightStart}:00` });
       await callService("input_number", "set_value", { entity_id: ids.dayTemp, value: payload.dayTemp });
@@ -328,19 +339,29 @@ async function readSnapshot() {
   // Only zones whose helpers exist in Home Assistant are reported.
   const thermostatSchedules = SCHEDULE_ZONES.filter((zone) => byId.has(scheduleEntities(zone).enabled)).map(
     (zone) => {
-      const ids = scheduleEntities(zone);
-      const time = (id) => (/^\d{2}:\d{2}:\d{2}$/.test(byId.get(id)?.state ?? "") ? byId.get(id).state : null);
+      const time =(id) => (/^\d{2}:\d{2}:\d{2}$/.test(byId.get(id)?.state ?? "") ? byId.get(id).state : null);
       const number = (id) => {
         const value = Number.parseFloat(byId.get(id)?.state);
         return Number.isFinite(value) ? value : null;
       };
+      const times = (mode) => {
+        const ids = scheduleEntities(zone, mode);
+        if (!byId.has(ids.dayTemp)) return null;
+        return {
+          dayStart: time(ids.dayStart),
+          nightStart: time(ids.nightStart),
+          dayTemp: number(ids.dayTemp),
+          nightTemp: number(ids.nightTemp),
+        };
+      };
+      const cool = times("cool");
       return {
         zone,
-        enabled: byId.get(ids.enabled).state === "on",
-        dayStart: time(ids.dayStart),
-        nightStart: time(ids.nightStart),
-        dayTemp: number(ids.dayTemp),
-        nightTemp: number(ids.nightTemp),
+        enabled: byId.get(scheduleEntities(zone).enabled).state === "on",
+        // The top-level fields are the cool schedule, for websites from before the heat/cool split.
+        ...cool,
+        cool,
+        heat: times("heat"),
       };
     },
   );

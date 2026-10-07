@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0
+
+- Separate heat and cool thermostat schedules: reports both and saves the one the website
+  chooses (thermostats_<zone>_heat_* for heat). Needs the thermostat-schedules setup in Home
+  Assistant for the heat schedule; until then it behaves as before.
+
 ## 1.3.0
 
 - Reports the classroom lights on Kasa motion switches (on/off, display only; never switched).
