@@ -102,7 +102,8 @@ const callService = (domain, service, data) =>
 
 const isSlot = (value) => Number.isInteger(value) && value >= 1 && value <= BELL_SLOTS;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-// Only lights and thermostats may be controlled, never other switches.
+// Only lights and thermostats may be controlled, plus the switchable light
+// relays listed below; never other switches.
 const LIGHT = /^light\.[a-z0-9_]+$/;
 const CLIMATE = /^climate\.[a-z0-9_]+$/;
 const THERMOSTAT_MIN_F = 60;
@@ -156,6 +157,9 @@ const CLASSROOM_SWITCH_LIGHTS = [
   "switch.special_ed_motion_2",
   "switch.aid_room_motion_1",
 ];
+// Lights on relays the website may switch (kept in step with src/lib/building.ts).
+// E Kitchen #1 is the kitchen lights; its motion automation still turns them off.
+const SWITCHABLE_SWITCH_LIGHTS = ["switch.kitchen_e_kitchen_1_motion_sensor"];
 const outsideEntities = (key) => ({
   scheduled: `input_boolean.outside_${key}_scheduled`,
   onMode: `input_select.outside_${key}_on_mode`,
@@ -208,11 +212,23 @@ async function execute({ action, payload }) {
       });
     case "ring_bell":
       return callService("script", "turn_on", { entity_id: RING_SCRIPT });
-    case "set_lights":
-      if (!isEntityList(payload.entities, LIGHT) || typeof payload.on !== "boolean") {
+    case "set_lights": {
+      const entities = Array.isArray(payload.entities) ? payload.entities : [];
+      const lights = entities.filter((e) => LIGHT.test(e));
+      const relays = entities.filter((e) => SWITCHABLE_SWITCH_LIGHTS.includes(e));
+      if (
+        !entities.length ||
+        entities.length > 100 ||
+        lights.length + relays.length !== entities.length ||
+        typeof payload.on !== "boolean"
+      ) {
         throw new Error("Invalid lights");
       }
-      return callService("light", payload.on ? "turn_on" : "turn_off", { entity_id: payload.entities });
+      const service = payload.on ? "turn_on" : "turn_off";
+      if (lights.length) await callService("light", service, { entity_id: lights });
+      if (relays.length) await callService("switch", service, { entity_id: relays });
+      return;
+    }
     case "set_thermostat_temp":
       if (
         !isEntityList(payload.entities, CLIMATE) ||
@@ -394,7 +410,7 @@ async function readSnapshot() {
     thermostats,
     thermostatSchedules,
     outsideSchedules,
-    switchLights: CLASSROOM_SWITCH_LIGHTS.filter((id) => byId.has(id)).map((id) => ({
+    switchLights: [...CLASSROOM_SWITCH_LIGHTS, ...SWITCHABLE_SWITCH_LIGHTS].filter((id) => byId.has(id)).map((id) => ({
       entity: id,
       name: byId.get(id).attributes?.friendly_name ?? id,
       on: onOff(id),

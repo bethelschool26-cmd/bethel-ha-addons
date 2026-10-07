@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0
+
+- The kitchen lights (Shelly relay E Kitchen #1) are reported and can be switched from the website.
+
 ## 1.4.0
 
 - Separate heat and cool thermostat schedules: reports both and saves the one the website
