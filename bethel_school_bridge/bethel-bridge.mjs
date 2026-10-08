@@ -144,6 +144,12 @@ const OUTSIDE_KEYS = [
 ];
 const OUTSIDE_DIMMERS = ["parking_lot", "carport_cans", "front_eve_cans"];
 const OUTSIDE_IS_DARK = "input_boolean.outside_is_dark";
+// Light-sensor levels for "dark" and "light", read by "Outside - Darkness"
+// (created by home-assistant/outside-lux-setup.mjs).
+const LUX_SENSOR = "sensor.gym_bethel_school_weather_station_solar_lux";
+const DARK_LUX = "input_number.outside_dark_lux";
+const LIGHT_LUX = "input_number.outside_light_lux";
+const LUX_MAX = 2000;
 
 // Classroom lights on Kasa motion switches: reported (on/off) for display
 // only; the bridge never switches them.
@@ -157,6 +163,33 @@ const CLASSROOM_SWITCH_LIGHTS = [
   "switch.special_ed_motion_2",
   "switch.aid_room_motion_1",
 ];
+// Motion-light countdowns (display only; keep in step with MOTION_AREAS in
+// src/lib/building.ts). The kitchen has no timer: its automation turns the
+// lights off once all three sensors have been clear for 20 minutes.
+const MOTION_TIMERS = [
+  "timer.cafeteria_lights",
+  "timer.cafeteria_off_delay",
+  "timer.restroom_hall_lights",
+  "timer.restroom_hall_off_delay",
+  "timer.classroom_hall_lights",
+  "timer.se_gym_mechanic_rm_lights",
+];
+const KITCHEN_MOTION = [
+  "binary_sensor.kitchen_e_kitchen_1_motion_sensor_input_0",
+  "binary_sensor.shelly1g4_d885acf35844_input_0",
+  "binary_sensor.shelly1g4_d885acf25854_input_0",
+];
+
+// UniFi devices report as "A A" (name twice); keep one copy.
+function trackerName(state) {
+  const attrs = state.attributes ?? {};
+  let name = typeof attrs.friendly_name === "string" ? attrs.friendly_name.replace(/\s+/g, " ").trim() : "";
+  if (name === "undefined") name = "";
+  const half = name.slice(0, (name.length - 1) / 2);
+  if (name.length % 2 === 1 && half && name === `${half} ${half}`) name = half;
+  return (name || attrs.host_name || attrs.mac || state.entity_id).slice(0, 100);
+}
+
 // Lights on relays the website may switch (kept in step with src/lib/building.ts).
 // E Kitchen #1 is the kitchen lights; its motion automation still turns them off.
 const SWITCHABLE_SWITCH_LIGHTS = ["switch.kitchen_e_kitchen_1_motion_sensor"];
@@ -284,6 +317,21 @@ async function execute({ action, payload }) {
       // Last, so the automation re-applies with all the new values in place.
       return callService("input_boolean", payload.enabled ? "turn_on" : "turn_off", { entity_id: ids.enabled });
     }
+    case "set_outside_lux":
+      if (
+        !Number.isInteger(payload.darkBelow) ||
+        !Number.isInteger(payload.lightAbove) ||
+        payload.darkBelow < 1 ||
+        payload.lightAbove > LUX_MAX ||
+        payload.darkBelow >= payload.lightAbove
+      ) {
+        throw new Error("Invalid light sensor levels");
+      }
+      await ha(`states/${DARK_LUX}`).catch(() => {
+        throw new Error("The light sensor levels are not set up in Home Assistant");
+      });
+      await callService("input_number", "set_value", { entity_id: DARK_LUX, value: payload.darkBelow });
+      return callService("input_number", "set_value", { entity_id: LIGHT_LUX, value: payload.lightAbove });
     case "set_outside_schedule": {
       const dimmer = OUTSIDE_DIMMERS.includes(payload.key);
       if (
@@ -413,8 +461,66 @@ async function readSnapshot() {
     };
   });
 
+  const motionTimers = MOTION_TIMERS.filter((id) => byId.has(id)).map((id) => {
+    const timer = byId.get(id);
+    return {
+      entity: id,
+      state: timer.state,
+      finishesAt: timer.state === "active" ? (timer.attributes?.finishes_at ?? null) : null,
+    };
+  });
+  const kitchenSensors = KITCHEN_MOTION.map((id) => byId.get(id)).filter(Boolean);
+  const kitchenMotion = kitchenSensors.length
+    ? {
+        motion: kitchenSensors.some((s) => s.state === "on"),
+        // When the last sensor went clear; the lights go off 20 minutes later.
+        clearSince: kitchenSensors.every((s) => s.state === "off")
+          ? kitchenSensors.map((s) => s.last_changed).sort().at(-1)
+          : null,
+      }
+    : null;
+
+  // UniFi network, view-only (Network tab, admins only). Equipment = UniFi
+  // devices with <name>_state and <name>_uptime sensors. The Wi-Fi on/off
+  // switches are never reported.
+  const pct = (id) => num(Number.parseFloat(byId.get(id)?.state));
+  const network = {
+    equipment: states
+      .filter((s) => /^sensor\.[a-z0-9_]+_state$/.test(s.entity_id) && byId.has(s.entity_id.replace(/_state$/, "_uptime")))
+      .map((s) => {
+        const base = s.entity_id.slice("sensor.".length, -"_state".length);
+        const update = byId.get(`update.${base}_firmware`);
+        return {
+          name: (s.attributes?.friendly_name ?? base).replace(/\s+State$/, "").replace(/\s+/g, " ").trim(),
+          state: s.state,
+          upSince: byId.get(`sensor.${base}_uptime`)?.state ?? null,
+          cpu: pct(`sensor.${base}_cpu_utilization`),
+          memory: pct(`sensor.${base}_memory_utilization`),
+          updateAvailable: update ? update.state === "on" : null,
+        };
+      }),
+    wifi: states
+      .filter((s) => /^sensor\.bethel_school_[a-z0-9_]+_clients$/.test(s.entity_id))
+      .map((s) => ({
+        name: (s.attributes?.friendly_name ?? s.entity_id).replace(/\s+Clients$/, "").replace(/^Bethel_School_/, ""),
+        clients: pct(s.entity_id),
+      })),
+    devices: states
+      .filter((s) => s.entity_id.startsWith("device_tracker.") && s.attributes?.source_type === "router")
+      .map((s) => ({
+        name: trackerName(s),
+        online: s.state === "home",
+        ip: s.attributes?.ip ?? null,
+        wifi: s.attributes?.essid ?? null,
+        since: s.last_changed ?? null,
+      })),
+  };
+
   const automation = byId.get(config.automation);
   return {
+    motionTimers,
+    kitchenMotion,
+    network,
     bellsEnabled: isOn(BELLS_ENABLED),
     automationEnabled: automation ? automation.state === "on" : null,
     bells,
@@ -429,6 +535,9 @@ async function readSnapshot() {
       brightness: null,
     })),
     isDark: byId.has(OUTSIDE_IS_DARK) ? byId.get(OUTSIDE_IS_DARK).state === "on" : null,
+    outsideLux: byId.has(DARK_LUX)
+      ? { now: pct(LUX_SENSOR), darkBelow: pct(DARK_LUX), lightAbove: pct(LIGHT_LUX) }
+      : null,
     errors,
   };
 }

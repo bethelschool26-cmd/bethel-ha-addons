@@ -1,5 +1,5 @@
 name: Bethel School Bridge
-version: "1.6.0"
+version: "1.7.0"
 slug: bethel_school_bridge
 description: Connects the Bethel School staff website (Building page) to Home Assistant for bells, lights and thermostats.
 url: https://github.com/bethelschool26-cmd/bethel-ha-addons

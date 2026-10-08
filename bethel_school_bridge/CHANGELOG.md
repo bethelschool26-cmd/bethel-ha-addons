@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.0
+
+- Reports the UniFi network (view-only; never the Wi-Fi on/off switches), the motion-light
+  timers and kitchen motion sensors, and the outside light sensor with its dark/light levels.
+- Can change the outside dark/light levels (needs the outside-lux setup in Home Assistant).
+
 ## 1.6.0
 
 - Reports which lights are dimmable and can set a light's brightness (gym and stage dimmer sliders).
