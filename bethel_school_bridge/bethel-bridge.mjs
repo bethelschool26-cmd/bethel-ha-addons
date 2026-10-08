@@ -508,8 +508,13 @@ async function readSnapshot() {
       .map((s) => {
         const base = s.entity_id.slice("sensor.".length, -"_state".length);
         const update = byId.get(`update.${base}_firmware`);
+        const tracker = byId.get(`device_tracker.${base}`);
         return {
           name: (s.attributes?.friendly_name ?? base).replace(/\s+State$/, "").replace(/\s+/g, " ").trim(),
+          ip: tracker?.attributes?.ip ?? null,
+          mac: tracker?.attributes?.mac ?? null,
+          uplinkMac: byId.get(`sensor.${base}_uplink_mac`)?.state ?? null,
+          temperature: pct(`sensor.${base}_temperature`),
           state: s.state,
           upSince: byId.get(`sensor.${base}_uptime`)?.state ?? null,
           cpu: pct(`sensor.${base}_cpu_utilization`),
@@ -530,6 +535,7 @@ async function readSnapshot() {
         online: s.state === "home",
         ip: s.attributes?.ip ?? null,
         wifi: s.attributes?.essid ?? null,
+        apMac: s.attributes?.ap_mac ?? null, // the access point it's connected to
         since: s.last_changed ?? null,
       })),
   };

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0
+
+- Network details: IP, MAC, uplink and temperature for each UniFi device, and which access
+  point each Wi-Fi device is connected to.
+
 ## 1.8.0
 
 - Reports and can switch every building light on a relay (library, office, halls, restrooms,
