@@ -174,6 +174,8 @@ const MOTION_TIMERS = [
   "timer.classroom_hall_lights",
   "timer.se_gym_mechanic_rm_lights",
 ];
+// "Gym - idle controller" checks this sensor's clear time every 5 minutes.
+const GYM_MOTION = "binary_sensor.gym_gym_ceiling_motion_sensor_input_0";
 const KITCHEN_MOTION = [
   "binary_sensor.kitchen_e_kitchen_1_motion_sensor_input_0",
   "binary_sensor.shelly1g4_d885acf35844_input_0",
@@ -487,6 +489,16 @@ async function readSnapshot() {
       finishesAt: timer.state === "active" ? (timer.attributes?.finishes_at ?? null) : null,
     };
   });
+  // Gym idle controller inputs: the ceiling PIR and the school-year dates.
+  const gymSensor = byId.get(GYM_MOTION);
+  const gymMotion = gymSensor
+    ? {
+        motion: gymSensor.state === "on",
+        clearSince: gymSensor.state === "off" ? gymSensor.last_changed : null,
+        schoolYearStart: byId.get("input_datetime.gym_school_year_start")?.state ?? null,
+        schoolYearEnd: byId.get("input_datetime.gym_school_year_end")?.state ?? null,
+      }
+    : null;
   const kitchenSensors = KITCHEN_MOTION.map((id) => byId.get(id)).filter(Boolean);
   const kitchenMotion = kitchenSensors.length
     ? {
@@ -544,6 +556,7 @@ async function readSnapshot() {
   return {
     motionTimers,
     kitchenMotion,
+    gymMotion,
     network,
     bellsEnabled: isOn(BELLS_ENABLED),
     automationEnabled: automation ? automation.state === "on" : null,

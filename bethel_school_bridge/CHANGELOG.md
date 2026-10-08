@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.0
+
+- Reports the gym ceiling motion sensor and the gym school-year dates, for the gym light countdowns.
+
 ## 1.9.0
 
 - Network details: IP, MAC, uplink and temperature for each UniFi device, and which access
