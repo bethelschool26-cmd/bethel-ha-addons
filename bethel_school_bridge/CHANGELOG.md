@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0
+
+- Reports which lights are dimmable and can set a light's brightness (gym and stage dimmer sliders).
+
 ## 1.5.0
 
 - The kitchen lights (Shelly relay E Kitchen #1) are reported and can be switched from the website.

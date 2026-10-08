@@ -229,6 +229,17 @@ async function execute({ action, payload }) {
       if (relays.length) await callService("switch", service, { entity_id: relays });
       return;
     }
+    case "set_light_brightness":
+      if (
+        !isEntityList(payload.entities, LIGHT) ||
+        payload.entities.length > 20 ||
+        !Number.isInteger(payload.brightness) ||
+        payload.brightness < 1 ||
+        payload.brightness > 100
+      ) {
+        throw new Error("Invalid brightness");
+      }
+      return callService("light", "turn_on", { entity_id: payload.entities, brightness_pct: payload.brightness });
     case "set_thermostat_temp":
       if (
         !isEntityList(payload.entities, CLIMATE) ||
@@ -339,6 +350,7 @@ async function readSnapshot() {
         state.state === "on" && num(state.attributes?.brightness) !== null
           ? Math.round((state.attributes.brightness / 255) * 100)
           : null,
+      dimmable: (state.attributes?.supported_color_modes ?? []).some((mode) => mode !== "onoff"),
     }));
   const thermostats = states
     .filter((state) => CLIMATE.test(state.entity_id))
