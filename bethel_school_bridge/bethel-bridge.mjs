@@ -150,6 +150,14 @@ const LUX_SENSOR = "sensor.gym_bethel_school_weather_station_solar_lux";
 const DARK_LUX = "input_number.outside_dark_lux";
 const LIGHT_LUX = "input_number.outside_light_lux";
 const LUX_MAX = 2000;
+// Gloomy-day rule for the front eve + carport cans (home-assistant/outside-gloomy-setup.mjs).
+const GLOOMY = {
+  enabled: "input_boolean.outside_gloomy_enabled",
+  onBelow: "input_number.outside_gloomy_on_lux",
+  offAbove: "input_number.outside_gloomy_off_lux",
+  brightness: "input_number.outside_gloomy_brightness",
+};
+const GLOOMY_LUX_MAX = 50000;
 
 // Classroom lights on Kasa motion switches: reported (on/off) for display
 // only; the bridge never switches them.
@@ -352,6 +360,27 @@ async function execute({ action, payload }) {
       });
       await callService("input_number", "set_value", { entity_id: DARK_LUX, value: payload.darkBelow });
       return callService("input_number", "set_value", { entity_id: LIGHT_LUX, value: payload.lightAbove });
+    case "set_gloomy_rule":
+      if (
+        typeof payload.enabled !== "boolean" ||
+        !Number.isInteger(payload.onBelow) ||
+        !Number.isInteger(payload.offAbove) ||
+        !Number.isInteger(payload.brightness) ||
+        payload.onBelow < 100 ||
+        payload.offAbove > GLOOMY_LUX_MAX ||
+        payload.onBelow >= payload.offAbove ||
+        payload.brightness < 10 ||
+        payload.brightness > 100
+      ) {
+        throw new Error("Invalid gloomy-day settings");
+      }
+      await ha(`states/${GLOOMY.enabled}`).catch(() => {
+        throw new Error("The gloomy-day rule is not set up in Home Assistant");
+      });
+      await callService("input_number", "set_value", { entity_id: GLOOMY.onBelow, value: payload.onBelow });
+      await callService("input_number", "set_value", { entity_id: GLOOMY.offAbove, value: payload.offAbove });
+      await callService("input_number", "set_value", { entity_id: GLOOMY.brightness, value: payload.brightness });
+      return callService("input_boolean", payload.enabled ? "turn_on" : "turn_off", { entity_id: GLOOMY.enabled });
     case "set_outside_schedule": {
       const dimmer = OUTSIDE_DIMMERS.includes(payload.key);
       if (
@@ -574,6 +603,14 @@ async function readSnapshot() {
     isDark: byId.has(OUTSIDE_IS_DARK) ? byId.get(OUTSIDE_IS_DARK).state === "on" : null,
     outsideLux: byId.has(DARK_LUX)
       ? { now: pct(LUX_SENSOR), darkBelow: pct(DARK_LUX), lightAbove: pct(LIGHT_LUX) }
+      : null,
+    gloomy: byId.has(GLOOMY.enabled)
+      ? {
+          enabled: byId.get(GLOOMY.enabled).state === "on",
+          onBelow: pct(GLOOMY.onBelow),
+          offAbove: pct(GLOOMY.offAbove),
+          brightness: pct(GLOOMY.brightness),
+        }
       : null,
     errors,
   };

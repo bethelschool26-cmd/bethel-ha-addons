@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.0
+
+- Reports and edits the gloomy-day rule (front eve + carport cans): on/off lux levels, brightness, on/off.
+
 ## 1.10.0
 
 - Reports the gym ceiling motion sensor and the gym school-year dates, for the gym light countdowns.
