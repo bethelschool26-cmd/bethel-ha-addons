@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.0
+
+- Reports when the light sensor passed each dusk/dawn and gloomy-day level, for the 10-minute hold countdowns.
+
 ## 1.11.0
 
 - Reports and edits the gloomy-day rule (front eve + carport cans): on/off lux levels, brightness, on/off.

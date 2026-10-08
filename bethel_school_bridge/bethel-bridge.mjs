@@ -158,6 +158,37 @@ const GLOOMY = {
   brightness: "input_number.outside_gloomy_brightness",
 };
 const GLOOMY_LUX_MAX = 50000;
+// Home Assistant waits for the sensor to stay past each level for 10 minutes;
+// the website counts that down, so look back a little further than that.
+const LUX_LOOKBACK_MS = 20 * 60_000;
+
+// When the light sensor's current run below/above each level started (ISO),
+// or null when it isn't past that level now. A missing reading ends a run,
+// as it does for Home Assistant's numeric_state triggers.
+async function luxSince(levels) {
+  const start = new Date(Date.now() - LUX_LOOKBACK_MS).toISOString();
+  const [rows = []] = await ha(
+    `history/period/${start}?filter_entity_id=${LUX_SENSOR}&minimal_response&no_attributes`,
+  );
+  const readings = rows.map((row) => ({ at: row.last_changed, lux: Number.parseFloat(row.state) }));
+  const since = (test, level) => {
+    if (typeof level !== "number") return null;
+    let at = null;
+    for (let i = readings.length - 1; i >= 0; i--) {
+      if (!Number.isFinite(readings[i].lux) || !test(readings[i].lux, level)) break;
+      at = readings[i].at;
+    }
+    return at;
+  };
+  const below = (lux, level) => lux < level;
+  const above = (lux, level) => lux > level;
+  return {
+    belowDark: since(below, levels.darkBelow),
+    aboveLight: since(above, levels.lightAbove),
+    belowGloomyOn: since(below, levels.onBelow),
+    aboveGloomyOff: since(above, levels.offAbove),
+  };
+}
 
 // Classroom lights on Kasa motion switches: reported (on/off) for display
 // only; the bridge never switches them.
@@ -602,7 +633,20 @@ async function readSnapshot() {
     })),
     isDark: byId.has(OUTSIDE_IS_DARK) ? byId.get(OUTSIDE_IS_DARK).state === "on" : null,
     outsideLux: byId.has(DARK_LUX)
-      ? { now: pct(LUX_SENSOR), darkBelow: pct(DARK_LUX), lightAbove: pct(LIGHT_LUX) }
+      ? {
+          now: pct(LUX_SENSOR),
+          darkBelow: pct(DARK_LUX),
+          lightAbove: pct(LIGHT_LUX),
+          since: await luxSince({
+            darkBelow: pct(DARK_LUX),
+            lightAbove: pct(LIGHT_LUX),
+            onBelow: pct(GLOOMY.onBelow),
+            offAbove: pct(GLOOMY.offAbove),
+          }).catch((error) => {
+            errors.push(`Light sensor history: ${error.message}`);
+            return null;
+          }),
+        }
       : null,
     gloomy: byId.has(GLOOMY.enabled)
       ? {
