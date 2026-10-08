@@ -190,9 +190,27 @@ function trackerName(state) {
   return (name || attrs.host_name || attrs.mac || state.entity_id).slice(0, 100);
 }
 
-// Lights on relays the website may switch (kept in step with src/lib/building.ts).
-// E Kitchen #1 is the kitchen lights; its motion automation still turns them off.
-const SWITCHABLE_SWITCH_LIGHTS = ["switch.kitchen_e_kitchen_1_motion_sensor"];
+// Lights on relays the website may switch (kept in step with src/lib/building.ts):
+// Kasa motion switches and the Shelly relays that switch lights (not the Shellys
+// used only as motion-sensor inputs). Their motion automations still run.
+const SWITCHABLE_SWITCH_LIGHTS = [
+  "switch.kitchen_e_kitchen_1_motion_sensor",
+  "switch.classroom_hall_s_classroom_hall_1",
+  "switch.classroom_hall_w_motion_2",
+  "switch.gym_se_gym_mechanic_rm_motion_sensor",
+  "switch.middle_mechanical_rm_motion",
+  "switch.n_classroom_hall_motion_3",
+  "switch.office_motion_sensor",
+  "switch.teacher_lounge",
+  "switch.w_entry_lights",
+  "switch.women_s_restroom_motion",
+  "switch.staff_bathroom_lights",
+  "switch.boy_s_locker_motion_1",
+  "switch.boy_s_locker_motion_2",
+  "switch.girl_s_locker_motion_1",
+  "switch.girl_s_locker_motion_2",
+  "switch.sports_equip_room",
+];
 const outsideEntities = (key) => ({
   scheduled: `input_boolean.outside_${key}_scheduled`,
   onMode: `input_select.outside_${key}_on_mode`,

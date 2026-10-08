@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0
+
+- Reports and can switch every building light on a relay (library, office, halls, restrooms,
+  locker rooms, mechanical rooms and more), not just the kitchen.
+
 ## 1.7.0
 
 - Reports the UniFi network (view-only; never the Wi-Fi on/off switches), the motion-light
