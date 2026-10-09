@@ -215,6 +215,8 @@ const MOTION_TIMERS = [
 ];
 // "Gym - idle controller" checks this sensor's clear time every 5 minutes.
 const GYM_MOTION = "binary_sensor.gym_gym_ceiling_motion_sensor_input_0";
+// Projectors the website may turn on or off (Songs page, on the school network only).
+const PROJECTORS = ["media_player.cafeteria_projector"];
 const KITCHEN_MOTION = [
   "binary_sensor.kitchen_e_kitchen_1_motion_sensor_input_0",
   "binary_sensor.shelly1g4_d885acf35844_input_0",
@@ -321,6 +323,9 @@ async function execute({ action, payload }) {
       if (relays.length) await callService("switch", service, { entity_id: relays });
       return;
     }
+    case "set_projector":
+      if (!PROJECTORS.includes(payload.entity) || typeof payload.on !== "boolean") throw new Error("Invalid projector");
+      return callService("media_player", payload.on ? "turn_on" : "turn_off", { entity_id: payload.entity });
     case "set_light_brightness":
       if (
         !isEntityList(payload.entities, LIGHT) ||
@@ -637,6 +642,11 @@ async function readSnapshot() {
   const automation = byId.get(config.automation);
   return {
     waterSensors,
+    projectors: PROJECTORS.filter((id) => byId.has(id)).map((id) => ({
+      entity: id,
+      name: byId.get(id).attributes?.friendly_name ?? id,
+      state: byId.get(id).state,
+    })),
     motionTimers,
     kitchenMotion,
     gymMotion,

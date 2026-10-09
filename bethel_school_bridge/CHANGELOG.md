@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.0
+
+- Reports the Commons projector and can turn it on or off (Songs page, school network only).
+
 ## 1.13.0
 
 - Reports the flood sensors (leak, battery) for admins, and checks them every minute so a leak
