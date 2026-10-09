@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.0
+
+- Reports the flood sensors (leak, battery) for admins, and checks them every minute so a leak
+  reaches the website right away.
+
 ## 1.12.0
 
 - Reports when the light sensor passed each dusk/dawn and gloomy-day level, for the 10-minute hold countdowns.

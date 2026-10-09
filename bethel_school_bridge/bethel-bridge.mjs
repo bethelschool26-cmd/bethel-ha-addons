@@ -443,6 +443,14 @@ async function execute({ action, payload }) {
 
 // ------------------------------------------------------------------- sync
 
+const waterSensorStates = (states) =>
+  states.filter(
+    (s) =>
+      /^binary_sensor\.[a-z0-9_]+$/.test(s.entity_id) &&
+      s.attributes?.device_class === "moisture" &&
+      !/weather_station|rain/.test(s.entity_id),
+  );
+
 async function readSnapshot() {
   const states = await ha("states");
   const byId = new Map(states.map((state) => [state.entity_id, state]));
@@ -612,8 +620,23 @@ async function readSnapshot() {
       })),
   };
 
+  // Flood sensors (moisture binary sensors, not the weather station's rain sensor).
+  const waterSensors = waterSensorStates(states).map((s) => {
+    const base = s.entity_id.slice("binary_sensor.".length);
+    const cable = byId.get(`binary_sensor.${base}_cable_unplugged`);
+    return {
+      entity: s.entity_id,
+      name: s.attributes?.friendly_name ?? base,
+      leak: s.state === "on" ? true : s.state === "off" ? false : null,
+      since: s.last_changed ?? null,
+      battery: pct(`sensor.${base}_battery`),
+      cableUnplugged: cable ? cable.state === "on" : null,
+    };
+  });
+
   const automation = byId.get(config.automation);
   return {
+    waterSensors,
     motionTimers,
     kitchenMotion,
     gymMotion,
@@ -753,6 +776,25 @@ async function listen() {
 }
 
 process.on("unhandledRejection", (error) => log(`Unexpected error: ${error?.message ?? error}`));
+
+// The website only asks for fresh state while someone has it open, so check
+// the flood sensors every minute and report straight away when one changes.
+let lastLeaks = null;
+setInterval(async () => {
+  try {
+    const leaks = waterSensorStates(await ha("states"))
+      .map((s) => `${s.entity_id}=${s.state}`)
+      .sort()
+      .join(",");
+    if (lastLeaks !== null && leaks !== lastLeaks) {
+      log(`Flood sensor changed: ${leaks}`);
+      sync("water sensor changed");
+    }
+    lastLeaks = leaks;
+  } catch {
+    // Home Assistant unreachable; the next check retries.
+  }
+}, 60_000);
 
 log(`Bethel School bridge starting. Website: ${config.siteUrl}  Home Assistant: ${config.haUrl}`);
 try {
